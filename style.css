@@ -1,51 +1,52 @@
 @import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
-/* Remove margins on print */
 @media print {
 	body {
 		margin: 0 !important;
 	}
 }
 
-/* Global variables */
 :root {
 	--ck-content-font-family: 'Lato';
 	--ck-sidebar-width: 270px;
-	--ck-editor-height: 100vh; /* full viewport height */
+	--ck-editor-height: 100vh;
 }
 
-/* Base container */
+/* === Base layout === */
 .main-container {
 	font-family: var(--ck-content-font-family);
-	width: fit-content;
-	margin-left: auto;
-	margin-right: auto;
-	height: 100vh;
+	width: 100%;
+	max-width: 1200px;
+	margin: 0 auto;
 	display: flex;
 	flex-direction: column;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 0 16px;
 }
 
-/* Presence header (if used) */
 .main-container .presence {
 	margin-bottom: 8px;
 }
 
-/* Layout */
+/* === Editor container === */
 .editor-container__editor-wrapper {
 	display: flex;
-	width: fit-content;
-}
-
-/* Main document editor container */
-.editor-container_document-editor {
-	border: 1px solid var(--ck-color-base-border);
-	height: 100vh;
-	display: flex;
-	flex-direction: column;
+	width: 100%;
+	flex: 1;
 	box-sizing: border-box;
 }
 
-/* Toolbar */
+/* === Document Editor layout === */
+.editor-container_document-editor {
+	border: 1px solid var(--ck-color-base-border);
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+}
+
+/* === Toolbar and menu bar === */
 .editor-container_document-editor .editor-container__toolbar {
 	display: flex;
 	position: relative;
@@ -55,59 +56,56 @@
 .editor-container_document-editor .editor-container__toolbar > .ck.ck-toolbar {
 	flex-grow: 1;
 	width: 0;
-	border-bottom-right-radius: 0;
-	border-bottom-left-radius: 0;
-	border-top: 0;
-	border-left: 0;
-	border-right: 0;
+	border: none;
+	border-bottom: 1px solid var(--ck-color-base-border);
+	border-radius: 0;
 }
 
-/* Menu bar (if active) */
 .editor-container_document-editor .editor-container__menu-bar > .ck.ck-menu-bar {
-	border-bottom-right-radius: 0;
-	border-bottom-left-radius: 0;
-	border-top: 0;
-	border-left: 0;
-	border-right: 0;
+	border: none;
+	border-bottom: 1px solid var(--ck-color-base-border);
+	border-radius: 0;
 }
 
-/* ✅ Editor wrapper — fill height, remove inner scroll */
+/* === Editor wrapper fix (main section) === */
 .editor-container_document-editor .editor-container__editor-wrapper {
+	position: relative;
 	flex: 1;
+	height: calc(100vh - 80px); /* adjust for toolbar height */
 	max-height: none;
-	min-height: calc(var(--ck-editor-height) - 50px);
-	overflow-y: visible;
+	min-height: 0;
+	overflow: visible;
 	background: var(--ck-color-base-foreground);
 	display: flex;
 	align-items: stretch;
+	box-sizing: border-box;
 }
 
-/* Editor content area */
+/* === Editor area === */
 .editor-container_document-editor .editor-container__editor {
-	margin-top: 28px;
-	margin-bottom: 28px;
-	height: 100%;
+	flex: 1;
 	display: flex;
+	flex-direction: column;
+	height: 100%;
+	margin: 0;
+}
+
+/* === Editable content area === */
+.editor-container_document-editor .editor-container__editor .ck.ck-editor__editable {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	min-height: calc(100vh - 150px);
+	height: auto;
+	padding: 32px;
+	margin: 0 auto;
+	border: 1px solid hsl(0, 0%, 82.7%);
+	background: hsl(0, 0%, 100%);
+	box-shadow: 0 2px 3px hsla(0, 0%, 0%, 0.078);
 	flex: 1;
 }
 
-/* ✅ Editable surface (the white "page") */
-.editor-container_document-editor .editor-container__editor .ck.ck-editor__editable {
-	box-sizing: border-box;
-	min-width: calc(210mm + 2px);
-	max-width: calc(210mm + 2px);
-	min-height: 100vh; /* full viewport height */
-	height: auto;
-	padding: 20mm 12mm;
-	border: 1px hsl(0, 0%, 82.7%) solid;
-	background: hsl(0, 0%, 100%);
-	box-shadow: 0 2px 3px hsla(0, 0%, 0%, 0.078);
-	flex: 1 1 auto;
-	margin-left: 72px;
-	margin-right: 72px;
-}
-
-/* Sidebar (AI or annotations) */
+/* === Sidebar and annotations === */
 .editor-container_include-annotations .editor-container__editor .ck.ck-editor__editable {
 	margin-right: 0;
 }
@@ -118,7 +116,17 @@
 	margin-top: 28px;
 	margin-left: 10px;
 	margin-right: 10px;
-	height: 100%;
-	display: flex;
-	flex-direction: column;
+}
+
+/* === Responsive adjustments === */
+@media (max-width: 900px) {
+	.editor-container_document-editor .editor-container__editor-wrapper {
+		flex-direction: column;
+		height: auto;
+	}
+
+	.editor-container_document-editor .editor-container__editor .ck.ck-editor__editable {
+		padding: 20px;
+		min-height: 80vh;
+	}
 }
