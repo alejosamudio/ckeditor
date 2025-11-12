@@ -1,37 +1,51 @@
 @import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
+/* Remove margins on print */
 @media print {
 	body {
 		margin: 0 !important;
 	}
 }
 
+/* Global variables */
 :root {
 	--ck-content-font-family: 'Lato';
 	--ck-sidebar-width: 270px;
-	--ck-editor-height: 700px;
+	--ck-editor-height: 100vh; /* full viewport height */
 }
 
+/* Base container */
 .main-container {
 	font-family: var(--ck-content-font-family);
 	width: fit-content;
 	margin-left: auto;
 	margin-right: auto;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
 }
 
+/* Presence header (if used) */
 .main-container .presence {
 	margin-bottom: 8px;
 }
 
+/* Layout */
 .editor-container__editor-wrapper {
 	display: flex;
 	width: fit-content;
 }
 
+/* Main document editor container */
 .editor-container_document-editor {
 	border: 1px solid var(--ck-color-base-border);
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
 }
 
+/* Toolbar */
 .editor-container_document-editor .editor-container__toolbar {
 	display: flex;
 	position: relative;
@@ -48,6 +62,7 @@
 	border-right: 0;
 }
 
+/* Menu bar (if active) */
 .editor-container_document-editor .editor-container__menu-bar > .ck.ck-menu-bar {
 	border-bottom-right-radius: 0;
 	border-bottom-left-radius: 0;
@@ -56,25 +71,33 @@
 	border-right: 0;
 }
 
+/* ✅ Editor wrapper — fill height, remove inner scroll */
 .editor-container_document-editor .editor-container__editor-wrapper {
-	max-height: var(--ck-editor-height);
-	min-height: var(--ck-editor-height);
-	overflow-y: scroll;
+	flex: 1;
+	max-height: none;
+	min-height: calc(var(--ck-editor-height) - 50px);
+	overflow-y: visible;
 	background: var(--ck-color-base-foreground);
+	display: flex;
+	align-items: stretch;
 }
 
+/* Editor content area */
 .editor-container_document-editor .editor-container__editor {
 	margin-top: 28px;
 	margin-bottom: 28px;
 	height: 100%;
+	display: flex;
+	flex: 1;
 }
 
+/* ✅ Editable surface (the white "page") */
 .editor-container_document-editor .editor-container__editor .ck.ck-editor__editable {
 	box-sizing: border-box;
 	min-width: calc(210mm + 2px);
 	max-width: calc(210mm + 2px);
-	min-height: 297mm;
-	height: fit-content;
+	min-height: 100vh; /* full viewport height */
+	height: auto;
 	padding: 20mm 12mm;
 	border: 1px hsl(0, 0%, 82.7%) solid;
 	background: hsl(0, 0%, 100%);
@@ -84,6 +107,7 @@
 	margin-right: 72px;
 }
 
+/* Sidebar (AI or annotations) */
 .editor-container_include-annotations .editor-container__editor .ck.ck-editor__editable {
 	margin-right: 0;
 }
@@ -94,4 +118,7 @@
 	margin-top: 28px;
 	margin-left: 10px;
 	margin-right: 10px;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
