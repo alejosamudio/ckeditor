@@ -4,11 +4,91 @@
  * https://ckeditor.com/ckeditor-5/builder/
  */
 
-console.info('[CKEditorBridge] Bootstrap starting', {
-        embedded: window.parent !== window,
-        href: window.location?.href,
-        userAgent: navigator.userAgent
-});
+const {
+	DecoupledEditor,
+	Autosave,
+	Essentials,
+	Paragraph,
+	CloudServices,
+	Autoformat,
+	TextTransformation,
+	LinkImage,
+	Link,
+	ImageBlock,
+	ImageToolbar,
+	BlockQuote,
+	Bold,
+	Bookmark,
+	CKBox,
+	ImageUpload,
+	ImageInsert,
+	ImageInsertViaUrl,
+	AutoImage,
+	PictureEditing,
+	CKBoxImageEdit,
+	CodeBlock,
+	TableColumnResize,
+	Table,
+	TableToolbar,
+	Emoji,
+	Mention,
+	PasteFromOffice,
+	FindAndReplace,
+	FontBackgroundColor,
+	FontColor,
+	FontFamily,
+	FontSize,
+	Heading,
+	HorizontalLine,
+	ImageCaption,
+	ImageResize,
+	ImageStyle,
+	Indent,
+	IndentBlock,
+	Code,
+	Italic,
+	AutoLink,
+	ListProperties,
+	List,
+	MediaEmbed,
+	RemoveFormat,
+	SpecialCharactersArrows,
+	SpecialCharacters,
+	SpecialCharactersCurrency,
+	SpecialCharactersEssentials,
+	SpecialCharactersLatin,
+	SpecialCharactersMathematical,
+	SpecialCharactersText,
+	Strikethrough,
+	Subscript,
+	Superscript,
+	TableCaption,
+	TableCellProperties,
+	TableProperties,
+	Alignment,
+	TodoList,
+	Underline,
+	BalloonToolbar
+} = window.CKEDITOR;
+
+const {
+        AIChat,
+        AIEditorIntegration,
+        AIQuickActions,
+        AIReviewMode,
+        PasteFromOfficeEnhanced,
+        FormatPainter,
+        LineHeight,
+        RealTimeCollaborativeComments,
+        RealTimeCollaborativeEditing,
+        PresenceList,
+        Comments,
+        RealTimeCollaborativeTrackChanges,
+        TrackChanges,
+        TrackChangesData,
+        TrackChangesPreview,
+        SlashCommand
+} = window.CKEDITOR_PREMIUM_FEATURES;
 
 const Bridge = (() => {
         const BRIDGE_ID = 'CKE_BUBBLE_BRIDGE_V1';
@@ -33,7 +113,6 @@ const Bridge = (() => {
         const isEmbedded = window.parent !== window;
         let parentReady = !isEmbedded;
         let targetOrigin = isEmbedded ? '*' : window.origin;
-        const targetWindows = new Set();
         let handshakeTimer = null;
         let handshakeAttempts = 0;
         const MAX_HANDSHAKE_ATTEMPTS = 20;
@@ -42,16 +121,6 @@ const Bridge = (() => {
         const parentReadyCallbacks = [];
         const messageHandlers = new Map();
         let editorInstance = null;
-
-        if (isEmbedded) {
-                targetWindows.add(window.parent);
-
-                if (window.top && window.top !== window && window.top !== window.parent) {
-                        targetWindows.add(window.top);
-                }
-        } else {
-                targetWindows.add(window);
-        }
 
         const constants = {
                 BRIDGE_ID,
@@ -66,11 +135,6 @@ const Bridge = (() => {
                 if (debugEnabled) {
                         console.log(logPrefix, ...args);
                 }
-        }
-
-        function addTargetWindow(target) {
-                if (!target || typeof target.postMessage !== 'function') return;
-                targetWindows.add(target);
         }
 
         function setDebug(enabled) {
@@ -105,15 +169,13 @@ const Bridge = (() => {
         function doPost(message) {
                 const origin = targetOrigin || '*';
 
-                targetWindows.forEach(target => {
-                        try {
-                                target.postMessage(message, origin);
-                        } catch (error) {
-                                console.error(logPrefix, 'Failed to postMessage to target', error);
-                        }
-                });
+                if (isEmbedded) {
+                        window.parent.postMessage(message, origin);
+                } else {
+                        window.postMessage(message, origin);
+                }
 
-                log('Sent message', message, '→', origin, 'targets:', targetWindows.size);
+                log('Sent message', message, '→', origin);
         }
 
         function flushQueue() {
@@ -153,15 +215,6 @@ const Bridge = (() => {
                                 isEmbedded,
                                 userAgent: navigator.userAgent
                         });
-
-                        // Surface at least one heartbeat log even if debug is disabled to help field diagnostics.
-                        if (!debugEnabled && handshakeAttempts === 1) {
-                                console.info(`${logPrefix} EDITOR_READY #${handshakeAttempts} → parent`, {
-                                        attempt: handshakeAttempts,
-                                        isEmbedded,
-                                        targetOrigin
-                                });
-                        }
                 };
 
                 emitReady();
@@ -268,12 +321,7 @@ const Bridge = (() => {
                 const data = event.data;
 
                 if (!data || data.bridge !== BRIDGE_ID) return;
-
-                if (isEmbedded && event.source && !targetWindows.has(event.source)) {
-                        addTargetWindow(event.source);
-                        log('Registered new parent candidate from message source');
-                }
-
+                if (isEmbedded && event.source !== window.parent) return;
                 if (data.direction && data.direction !== 'parent->editor') return;
 
                 log('Received message', data, 'from', event.origin);
@@ -319,39 +367,6 @@ const Bridge = (() => {
 })();
 
 window.CKEDITOR_BUBBLE_BRIDGE = Bridge;
-
-// Surface uncaught issues early so they are visible in the console and to the parent frame.
-window.addEventListener('error', event => {
-        const message = event?.error?.message || event?.message || 'Unknown error';
-        console.error('[CKEditorBridge] Uncaught error', event?.error || event);
-
-        try {
-                Bridge.send('EDITOR_ERROR', {
-                        message,
-                        stack: event?.error?.stack || null,
-                        timestamp: Date.now(),
-                        phase: 'window-error'
-                });
-        } catch (_) {}
-});
-
-window.addEventListener('unhandledrejection', event => {
-        const message = event?.reason?.message || event?.reason || 'Unhandled promise rejection';
-        console.error('[CKEditorBridge] Unhandled promise rejection', event?.reason || event);
-
-        try {
-                Bridge.send('EDITOR_ERROR', {
-                        message,
-                        stack: event?.reason?.stack || null,
-                        timestamp: Date.now(),
-                        phase: 'unhandled-rejection'
-                });
-        } catch (_) {}
-});
-
-// Kick off the handshake immediately so the parent can see EDITOR_READY
-// even if CKEditor initialization is delayed.
-Bridge.startHandshake();
 
 let suppressChangeEvents = false;
 
@@ -472,6 +487,289 @@ const CLOUD_SERVICES_TOKEN_URL =
 	'https://uplnolydjmzr.cke-cs.com/token/dev/9dcdd882883e3315126ce6f9865e9ec42fa58287442ece2a12be481798c5?limit=10';
 const CLOUD_SERVICES_WEBSOCKET_URL = 'wss://uplnolydjmzr.cke-cs.com/ws';
 
+const editorConfig = {
+	toolbar: {
+		items: [
+			'undo',
+			'redo',
+			'|',
+			'trackChanges',
+			'comment',
+			'commentsArchive',
+			'|',
+			'toggleAi',
+			'aiQuickActions',
+			'|',
+			'formatPainter',
+			'findAndReplace',
+			'|',
+			'heading',
+			'|',
+			'fontSize',
+			'fontFamily',
+			'fontColor',
+			'fontBackgroundColor',
+			'|',
+			'bold',
+			'italic',
+			'underline',
+			'strikethrough',
+			'subscript',
+			'superscript',
+			'code',
+			'removeFormat',
+			'|',
+			'emoji',
+			'specialCharacters',
+			'horizontalLine',
+			'link',
+			'bookmark',
+			'insertImage',
+			'insertImageViaUrl',
+			'ckbox',
+			'mediaEmbed',
+			'insertTable',
+			'blockQuote',
+			'codeBlock',
+			'|',
+			'alignment',
+			'lineHeight',
+			'|',
+			'bulletedList',
+			'numberedList',
+			'todoList',
+			'outdent',
+			'indent'
+		],
+		shouldNotGroupWhenFull: false
+	},
+	plugins: [
+		AIChat,
+		AIEditorIntegration,
+		AIQuickActions,
+		AIReviewMode,
+		Alignment,
+		Autoformat,
+		AutoImage,
+		AutoLink,
+		Autosave,
+		BalloonToolbar,
+		BlockQuote,
+		Bold,
+		Bookmark,
+		CKBox,
+		CKBoxImageEdit,
+		CloudServices,
+		Code,
+		CodeBlock,
+		Comments,
+		Emoji,
+		Essentials,
+		FindAndReplace,
+		FontBackgroundColor,
+		FontColor,
+		FontFamily,
+		FontSize,
+		FormatPainter,
+		Heading,
+		HorizontalLine,
+		ImageBlock,
+		ImageCaption,
+		ImageInsert,
+		ImageInsertViaUrl,
+		ImageResize,
+		ImageStyle,
+		ImageToolbar,
+		ImageUpload,
+		Indent,
+		IndentBlock,
+		Italic,
+		LineHeight,
+		Link,
+		LinkImage,
+		List,
+		ListProperties,
+		MediaEmbed,
+		Mention,
+		Paragraph,
+		PasteFromOffice,
+		PasteFromOfficeEnhanced,
+		PictureEditing,
+		PresenceList,
+		RealTimeCollaborativeComments,
+		RealTimeCollaborativeEditing,
+		RealTimeCollaborativeTrackChanges,
+		RemoveFormat,
+		SlashCommand,
+		SpecialCharacters,
+		SpecialCharactersArrows,
+		SpecialCharactersCurrency,
+		SpecialCharactersEssentials,
+		SpecialCharactersLatin,
+		SpecialCharactersMathematical,
+		SpecialCharactersText,
+		Strikethrough,
+		Subscript,
+		Superscript,
+		Table,
+		TableCaption,
+		TableCellProperties,
+		TableColumnResize,
+		TableProperties,
+		TableToolbar,
+		TextTransformation,
+		TodoList,
+		TrackChanges,
+		TrackChangesData,
+		TrackChangesPreview,
+		Underline
+	],
+	ai: {
+		container: {
+			type: 'overlay',
+			side: 'right'
+		},
+		chat: {
+			models: {},
+			context: {
+				document: { enabled: true },
+				urls: { enabled: true },
+				files: { enabled: true }
+			}
+		}
+	},
+	balloonToolbar: [
+		'comment',
+		'|',
+		'aiQuickActions',
+		'|',
+		'bold',
+		'italic',
+		'|',
+		'link',
+		'insertImage',
+		'|',
+		'bulletedList',
+		'numberedList'
+	],
+	cloudServices: {
+		tokenUrl: CLOUD_SERVICES_TOKEN_URL,
+		webSocketUrl: CLOUD_SERVICES_WEBSOCKET_URL
+	},
+	collaboration: { channelId: DOCUMENT_ID },
+	comments: {
+		editorConfig: {
+			extraPlugins: [Autoformat, Bold, Italic, List, Mention],
+			mention: {
+				feeds: [{ marker: '@', feed: [] }]
+			}
+		}
+	},
+	fontFamily: { supportAllValues: true },
+	fontSize: { options: [10, 12, 14, 'default', 18, 20, 22], supportAllValues: true },
+	heading: {
+		options: [
+			{ model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+			{ model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+			{ model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+			{ model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
+			{ model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
+			{ model: 'heading5', view: 'h5', title: 'Heading 5', class: 'ck-heading_heading5' },
+			{ model: 'heading6', view: 'h6', title: 'Heading 6', class: 'ck-heading_heading6' }
+		]
+	},
+	image: {
+		toolbar: [
+			'toggleImageCaption',
+			'|',
+			'imageStyle:alignBlockLeft',
+			'imageStyle:block',
+			'imageStyle:alignBlockRight',
+			'|',
+			'resizeImage',
+			'|',
+			'ckboxImageEdit'
+		],
+		styles: { options: ['alignBlockLeft', 'block', 'alignBlockRight'] }
+	},
+	initialData: '<p>Start writing...</p>',
+	licenseKey: LICENSE_KEY,
+	lineHeight: { supportAllValues: true },
+	link: {
+		addTargetToExternalLinks: true,
+		defaultProtocol: 'https://',
+		decorators: {
+			toggleDownloadable: {
+				mode: 'manual',
+				label: 'Downloadable',
+				attributes: { download: 'file' }
+			}
+		}
+	},
+	list: { properties: { styles: true, startIndex: true, reversed: true } },
+	mention: { feeds: [{ marker: '@', feed: [] }] },
+	placeholder: 'Type or paste your content here!',
+	presenceList: { container: document.querySelector('#editor-presence') },
+	sidebar: { container: document.querySelector('#editor-annotations') },
+	table: {
+		contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells', 'tableProperties', 'tableCellProperties']
+	}
+};
+
+// Show config alert if premium keys are missing
+configUpdateAlert(editorConfig);
+
+const CHANGE_DEBOUNCE_MS = 250;
+
+// Initialize editor
+DecoupledEditor.create(document.querySelector('#editor'), editorConfig)
+        .then(editor => {
+                // Append toolbar & menu
+                document.querySelector('#editor-toolbar').appendChild(editor.ui.view.toolbar.element);
+                document.querySelector('#editor-menu-bar').appendChild(editor.ui.view.menuBarView.element);
+
+                // Expose editor globally
+                window.editor = editor;
+                Bridge.setEditor(editor);
+
+                // 🔁 Send live updates to Bubble (with debounce)
+                let debounceTimer;
+                editor.model.document.on('change:data', () => {
+                        if (suppressChangeEvents) {
+                                return;
+                        }
+
+                        window.clearTimeout(debounceTimer);
+                        debounceTimer = window.setTimeout(() => {
+                                const html = editor.getData();
+                                Bridge.send('CONTENT_CHANGE', {
+                                        html,
+                                        reason: 'user-input',
+                                        timestamp: Date.now()
+                                });
+                        }, CHANGE_DEBOUNCE_MS);
+                });
+
+                Bridge.onParentReady(() => {
+                        Bridge.send('CONTENT_SYNC', {
+                                html: editor.getData(),
+                                reason: 'initial-sync',
+                                timestamp: Date.now()
+                        });
+                });
+
+                Bridge.startHandshake();
+
+                return editor;
+        })
+        .catch(error => {
+                console.error(error);
+                Bridge.send('EDITOR_ERROR', {
+                        message: error?.message || 'Failed to initialize CKEditor.',
+                        stack: error?.stack || null,
+                        timestamp: Date.now()
+                });
+        });
 
 let ckWaitAttempts = 0;
 const MAX_CK_WAIT_ATTEMPTS = 40;

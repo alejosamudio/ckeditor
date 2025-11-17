@@ -33,39 +33,6 @@
                         // Optional toggle for verbose bridge logging when the iframe is embedded.
                         // This flag is read by ckeditor.js before establishing the communication channel.
                         window.CKEDITOR_BRIDGE_DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
-
-                        // Emit an inline bootstrap heartbeat so we can see activity even if the bundled script fails to run.
-                        // This also gives the parent frame a minimal postMessage to listen for when debugging sandboxes.
-                        (function bootstrapProbe() {
-                                const details = {
-                                        href: window.location?.href,
-                                        embedded: window.parent !== window,
-                                        userAgent: navigator.userAgent
-                                };
-
-                                console.info('[CKEditorBridge] HTML shell loaded', details);
-
-                                try {
-                                        if (window.parent && window.parent !== window) {
-                                                window.parent.postMessage(
-                                                        {
-                                                                bridge: 'CKE_BUBBLE_BRIDGE_V1',
-                                                                version: '1.0.0',
-                                                                type: 'EDITOR_BOOTSTRAP',
-                                                                direction: 'editor->parent',
-                                                                timestamp: Date.now(),
-                                                                payload: {
-                                                                        phase: 'html-inline',
-                                                                        href: window.location?.href || null
-                                                                }
-                                                        },
-                                                        '*'
-                                                );
-                                        }
-                                } catch (error) {
-                                        console.warn('[CKEditorBridge] Inline bootstrap probe failed', error);
-                                }
-                        })();
                 </script>
                 <!-- CKEditor config MUST load AFTER the UMD bundles -->
                 <script type="module" src="./ckeditor.js"></script>
