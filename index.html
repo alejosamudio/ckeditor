@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>CKEditor 5 Sample</title>
+        <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>CKEditor 5 Sample</title>
 		<link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/32x32.png" sizes="32x32">
 		<link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/96x96.png" sizes="96x96">
 		<link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/120x120.png" sizes="120x120">
@@ -27,8 +28,13 @@
 		</div>
 		<script src="https://cdn.ckeditor.com/ckeditor5/47.2.0/ckeditor5.umd.js" crossorigin></script>
 		<script src="https://cdn.ckeditor.com/ckeditor5-premium-features/47.2.0/ckeditor5-premium-features.umd.js" crossorigin></script>
-		<script src="https://cdn.ckbox.io/ckbox/2.6.1/ckbox.js" crossorigin></script>
-		<!-- CKEditor config MUST load AFTER the UMD bundles -->
-		<script type="module" src="./ckeditor.js"></script>
-	</body>
+                <script src="https://cdn.ckbox.io/ckbox/2.6.1/ckbox.js" crossorigin></script>
+                <script>
+                        // Optional toggle for verbose bridge logging when the iframe is embedded.
+                        // This flag is read by ckeditor.js before establishing the communication channel.
+                        window.CKEDITOR_BRIDGE_DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
+                </script>
+                <!-- CKEditor config MUST load AFTER the UMD bundles -->
+                <script type="module" src="./ckeditor.js"></script>
+        </body>
 </html>

@@ -72,23 +72,424 @@ const {
 } = window.CKEDITOR;
 
 const {
-	AIChat,
-	AIEditorIntegration,
-	AIQuickActions,
-	AIReviewMode,
-	PasteFromOfficeEnhanced,
-	FormatPainter,
-	LineHeight,
-	RealTimeCollaborativeComments,
-	RealTimeCollaborativeEditing,
-	PresenceList,
-	Comments,
-	RealTimeCollaborativeTrackChanges,
-	TrackChanges,
-	TrackChangesData,
-	TrackChangesPreview,
-	SlashCommand
+        AIChat,
+        AIEditorIntegration,
+        AIQuickActions,
+        AIReviewMode,
+        PasteFromOfficeEnhanced,
+        FormatPainter,
+        LineHeight,
+        RealTimeCollaborativeComments,
+        RealTimeCollaborativeEditing,
+        PresenceList,
+        Comments,
+        RealTimeCollaborativeTrackChanges,
+        TrackChanges,
+        TrackChangesData,
+        TrackChangesPreview,
+        SlashCommand
 } = window.CKEDITOR_PREMIUM_FEATURES;
+
+const Bridge = (() => {
+        const BRIDGE_ID = 'CKE_BUBBLE_BRIDGE_V1';
+        const VERSION = '1.0.0';
+        const search = typeof window.location?.search === 'string' ? window.location.search : '';
+        const params = new URLSearchParams(search);
+        let storedDebug = false;
+
+        try {
+                storedDebug = window.localStorage?.getItem('ckeBridgeDebug') === 'true';
+        } catch (error) {
+                storedDebug = false;
+        }
+
+        let debugEnabled =
+                params.get('debug') === '1' ||
+                params.get('debug') === 'true' ||
+                storedDebug ||
+                window.CKEDITOR_BRIDGE_DEBUG === true;
+
+        const logPrefix = '[CKEditorBridge]';
+        const isEmbedded = window.parent !== window;
+        let parentReady = !isEmbedded;
+        let targetOrigin = isEmbedded ? '*' : window.origin;
+        let handshakeTimer = null;
+        let handshakeAttempts = 0;
+        const MAX_HANDSHAKE_ATTEMPTS = 20;
+        const outgoingQueue = [];
+        const pendingEditorActions = [];
+        const parentReadyCallbacks = [];
+        const messageHandlers = new Map();
+        let editorInstance = null;
+
+        const constants = {
+                BRIDGE_ID,
+                VERSION,
+                get DEBUG() {
+                        return debugEnabled;
+                },
+                isEmbedded
+        };
+
+        function log(...args) {
+                if (debugEnabled) {
+                        console.log(logPrefix, ...args);
+                }
+        }
+
+        function setDebug(enabled) {
+                debugEnabled = Boolean(enabled);
+
+                try {
+                        window.localStorage?.setItem('ckeBridgeDebug', debugEnabled ? 'true' : 'false');
+                } catch (error) {
+                        // LocalStorage might be unavailable (e.g. in private mode). Ignore errors silently.
+                }
+
+                if (debugEnabled) {
+                        console.log(logPrefix, 'Debug mode enabled');
+                } else {
+                        console.log(logPrefix, 'Debug mode disabled');
+                }
+        }
+
+        function composeMessage(type, payload = {}, overrides = {}) {
+                return {
+                        bridge: BRIDGE_ID,
+                        version: VERSION,
+                        type,
+                        payload,
+                        direction: overrides.direction || 'editor->parent',
+                        timestamp: Date.now(),
+                        requestId: overrides.requestId ?? null,
+                        messageId: overrides.messageId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+                };
+        }
+
+        function doPost(message) {
+                const origin = targetOrigin || '*';
+
+                if (isEmbedded) {
+                        window.parent.postMessage(message, origin);
+                } else {
+                        window.postMessage(message, origin);
+                }
+
+                log('Sent message', message, '→', origin);
+        }
+
+        function flushQueue() {
+                if (!parentReady) return;
+
+                while (outgoingQueue.length) {
+                        doPost(outgoingQueue.shift());
+                }
+        }
+
+        function send(type, payload = {}, options = {}) {
+                const message = composeMessage(type, payload, options);
+
+                if (parentReady || type === 'EDITOR_READY') {
+                        doPost(message);
+                } else {
+                        log('Queueing message until parent is ready', message);
+                        outgoingQueue.push(message);
+                }
+        }
+
+        function startHandshake() {
+                if (!isEmbedded) {
+                        log('Not embedded in an iframe. Parent communication disabled.');
+                        parentReady = true;
+                        flushQueue();
+                        return;
+                }
+
+                if (handshakeTimer) return;
+                handshakeAttempts = 0;
+
+                const emitReady = () => {
+                        handshakeAttempts += 1;
+                        send('EDITOR_READY', {
+                                attempt: handshakeAttempts,
+                                isEmbedded,
+                                userAgent: navigator.userAgent
+                        });
+
+                        // Surface at least one heartbeat log even if debug is disabled to help field diagnostics.
+                        if (!debugEnabled && handshakeAttempts === 1) {
+                                console.info(`${logPrefix} EDITOR_READY #${handshakeAttempts} → parent`, {
+                                        attempt: handshakeAttempts,
+                                        isEmbedded,
+                                        targetOrigin
+                                });
+                        }
+                };
+
+                emitReady();
+
+                handshakeTimer = window.setInterval(() => {
+                        if (parentReady) {
+                                window.clearInterval(handshakeTimer);
+                                handshakeTimer = null;
+                                return;
+                        }
+
+                        if (handshakeAttempts >= MAX_HANDSHAKE_ATTEMPTS) {
+                                window.clearInterval(handshakeTimer);
+                                handshakeTimer = null;
+                                log('No handshake acknowledgement received. Proceeding with wildcard origin.');
+                                parentReady = true;
+                                flushQueue();
+                                return;
+                        }
+
+                        emitReady();
+                }, 500);
+        }
+
+        function setTargetOrigin(origin) {
+                if (origin && origin !== 'null') {
+                        targetOrigin = origin;
+                        log('Target origin updated to', targetOrigin);
+                }
+        }
+
+        function acknowledgeParent(origin, payload = {}) {
+                if (!parentReady) {
+                        parentReady = true;
+
+                        if (payload && payload.targetOrigin) {
+                                targetOrigin = payload.targetOrigin;
+                        } else {
+                                setTargetOrigin(origin);
+                        }
+
+                        if (handshakeTimer) {
+                                window.clearInterval(handshakeTimer);
+                                handshakeTimer = null;
+                        }
+
+                        log('Handshake completed with parent.');
+                        flushQueue();
+                        send('EDITOR_READY_ACK', { receivedAt: Date.now() });
+
+                        while (parentReadyCallbacks.length) {
+                                const callback = parentReadyCallbacks.shift();
+
+                                try {
+                                        callback({ origin: targetOrigin });
+                                } catch (error) {
+                                        console.error(logPrefix, 'Parent ready callback failed', error);
+                                }
+                        }
+                } else if (targetOrigin === '*' && origin && origin !== 'null') {
+                        setTargetOrigin(origin);
+                }
+        }
+
+        function withEditor(callback) {
+                if (editorInstance) {
+                        callback(editorInstance);
+                } else {
+                        pendingEditorActions.push(callback);
+                }
+        }
+
+        function setEditor(editor) {
+                editorInstance = editor;
+
+                while (pendingEditorActions.length) {
+                        const action = pendingEditorActions.shift();
+
+                        try {
+                                action(editorInstance);
+                        } catch (error) {
+                                console.error(logPrefix, 'Deferred editor action failed', error);
+                        }
+                }
+        }
+
+        function onParentReady(callback) {
+                if (typeof callback !== 'function') return;
+
+                if (parentReady) {
+                        callback({ origin: targetOrigin });
+                } else {
+                        parentReadyCallbacks.push(callback);
+                }
+        }
+
+        function registerHandler(type, handler) {
+                if (typeof handler === 'function') {
+                        messageHandlers.set(type, handler);
+                }
+        }
+
+        window.addEventListener('message', event => {
+                const data = event.data;
+
+                if (!data || data.bridge !== BRIDGE_ID) return;
+                if (isEmbedded && event.source !== window.parent) return;
+                if (data.direction && data.direction !== 'parent->editor') return;
+
+                log('Received message', data, 'from', event.origin);
+
+                if (!parentReady || data.type === 'PARENT_READY') {
+                        acknowledgeParent(event.origin, data.payload || {});
+                } else if (targetOrigin === '*' && event.origin && event.origin !== 'null') {
+                        setTargetOrigin(event.origin);
+                }
+
+                const handler = messageHandlers.get(data.type);
+
+                if (handler) {
+                        try {
+                                handler({
+                                        payload: data.payload || {},
+                                        requestId: data.requestId ?? null,
+                                        event,
+                                        send
+                                });
+                        } catch (error) {
+                                console.error(logPrefix, `Error handling message ${data.type}`, error);
+                                send('HANDLER_ERROR', {
+                                        type: data.type,
+                                        message: error?.message || 'Unknown handler error'
+                                });
+                        }
+                } else if (data.type !== 'PARENT_READY') {
+                        log('No handler registered for type', data.type);
+                }
+        });
+
+        return {
+                send,
+                startHandshake,
+                setEditor,
+                withEditor,
+                onParentReady,
+                registerHandler,
+                setDebug,
+                constants
+        };
+})();
+
+window.CKEDITOR_BUBBLE_BRIDGE = Bridge;
+
+// Kick off the handshake immediately so the parent can see EDITOR_READY
+// even if CKEditor initialization is delayed.
+Bridge.startHandshake();
+
+let suppressChangeEvents = false;
+
+function applyExternalContent(html, { ackType, requestId, reason, focus } = {}) {
+        Bridge.withEditor(editor => {
+                suppressChangeEvents = true;
+                let success = false;
+                let errorMessage = null;
+
+                try {
+                        editor.setData(typeof html === 'string' ? html : '');
+
+                        if (focus) {
+                                editor.editing.view.focus();
+                        }
+
+                        success = true;
+                } catch (error) {
+                        errorMessage = error?.message || 'Unknown error applying editor content.';
+                        console.error('[CKEditorBridge] Failed to apply content from parent', error);
+                        Bridge.send('CONTENT_ERROR', {
+                                requestId,
+                                reason,
+                                message: errorMessage,
+                                timestamp: Date.now()
+                        });
+                }
+
+                window.setTimeout(() => {
+                        suppressChangeEvents = false;
+
+                        if (ackType) {
+                                Bridge.send(ackType, {
+                                        requestId,
+                                        status: success ? 'ok' : 'error',
+                                        reason,
+                                        message: errorMessage,
+                                        timestamp: Date.now()
+                                });
+                        }
+
+                        if (success) {
+                                Bridge.send('CONTENT_SYNC', {
+                                        requestId,
+                                        html: editor.getData(),
+                                        reason,
+                                        timestamp: Date.now()
+                                });
+                        }
+                }, 0);
+        });
+}
+
+Bridge.registerHandler('INIT', ({ payload, requestId }) => {
+        applyExternalContent(payload?.html ?? '', {
+                ackType: 'INIT_ACK',
+                requestId,
+                reason: 'init',
+                focus: payload?.focus === true
+        });
+});
+
+Bridge.registerHandler('SET_CONTENT', ({ payload, requestId }) => {
+        applyExternalContent(payload?.html ?? '', {
+                ackType: 'SET_CONTENT_ACK',
+                requestId,
+                reason: payload?.reason || 'set-content',
+                focus: payload?.focus === true
+        });
+});
+
+Bridge.registerHandler('CLEAR_CONTENT', ({ requestId }) => {
+        applyExternalContent('', {
+                ackType: 'CLEAR_CONTENT_ACK',
+                requestId,
+                reason: 'clear-content'
+        });
+});
+
+Bridge.registerHandler('REQUEST_CONTENT', ({ requestId }) => {
+        Bridge.withEditor(editor => {
+                Bridge.send('CONTENT_SYNC', {
+                        requestId,
+                        html: editor.getData(),
+                        reason: 'requested-sync',
+                        timestamp: Date.now()
+                });
+        });
+});
+
+Bridge.registerHandler('PING', ({ requestId, payload }) => {
+        Bridge.send('PONG', {
+                requestId,
+                echo: payload?.echo ?? null,
+                timestamp: Date.now()
+        });
+});
+
+Bridge.registerHandler('SET_DEBUG', ({ payload, requestId }) => {
+        const desiredState =
+                typeof payload?.enabled === 'boolean' ? payload.enabled : !Bridge.constants.DEBUG;
+
+        Bridge.setDebug(desiredState);
+        Bridge.send('SET_DEBUG_ACK', {
+                requestId,
+                status: 'ok',
+                enabled: Bridge.constants.DEBUG,
+                timestamp: Date.now()
+        });
+});
 
 const LICENSE_KEY =
 	'eyJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3NjQyMDE1OTksImp0aSI6ImNiMWJiNTk0LWIxODEtNGJmMi1iZTA5LTM2ZGM1MjY3MzIxZiIsInVzYWdlRW5kcG9pbnQiOiJodHRwczovL3Byb3h5LWV2ZW50LmNrZWRpdG9yLmNvbSIsImRpc3RyaWJ1dGlvbkNoYW5uZWwiOlsiY2xvdWQiLCJkcnVwYWwiLCJzaCJdLCJ3aGl0ZUxhYmVsIjp0cnVlLCJsaWNlbnNlVHlwZSI6InRyaWFsIiwiZmVhdHVyZXMiOlsiKiJdLCJ2YyI6ImFhNmQ1YmUwIn0.a4QCfokW3f4OX2Td4j7I5Nv6J9NsaWg4atvrEmD90ijhttvsbqFMfaoJ4a-X_V0ZJ0mxSN6mMf1jjWLJGlV0dQ';
@@ -331,42 +732,57 @@ const editorConfig = {
 // Show config alert if premium keys are missing
 configUpdateAlert(editorConfig);
 
+const CHANGE_DEBOUNCE_MS = 250;
+
 // Initialize editor
 DecoupledEditor.create(document.querySelector('#editor'), editorConfig)
-	.then(editor => {
-		// Append toolbar & menu
-		document.querySelector('#editor-toolbar').appendChild(editor.ui.view.toolbar.element);
-		document.querySelector('#editor-menu-bar').appendChild(editor.ui.view.menuBarView.element);
+        .then(editor => {
+                // Append toolbar & menu
+                document.querySelector('#editor-toolbar').appendChild(editor.ui.view.toolbar.element);
+                document.querySelector('#editor-menu-bar').appendChild(editor.ui.view.menuBarView.element);
 
-		// Expose editor globally
-		window.editor = editor;
+                // Expose editor globally
+                window.editor = editor;
+                Bridge.setEditor(editor);
 
-		// 🔁 Send live updates to Bubble (with debounce)
-		let debounceTimer;
-		editor.model.document.on('change:data', () => {
-			clearTimeout(debounceTimer);
-			debounceTimer = setTimeout(() => {
-				const content = editor.getData();
-				window.parent.postMessage(
-					{ type: 'CKEDITOR_CONTENT_UPDATE', data: content },
-					'*'
-				);
-			}, 300);
-		});
+                // 🔁 Send live updates to Bubble (with debounce)
+                let debounceTimer;
+                editor.model.document.on('change:data', () => {
+                        if (suppressChangeEvents) {
+                                return;
+                        }
 
-		// 📨 Listen for data from Bubble
-		window.addEventListener('message', (event) => {
-			if (event.data.type === 'LOAD_CONTENT') {
-				editor.setData(event.data.data || '');
-			}
-		});
+                        window.clearTimeout(debounceTimer);
+                        debounceTimer = window.setTimeout(() => {
+                                const html = editor.getData();
+                                Bridge.send('CONTENT_CHANGE', {
+                                        html,
+                                        reason: 'user-input',
+                                        timestamp: Date.now()
+                                });
+                        }, CHANGE_DEBOUNCE_MS);
+                });
 
-		// ✅ Notify when ready
-		window.parent.postMessage({ type: 'CKEDITOR_READY' }, '*');
+                Bridge.onParentReady(() => {
+                        Bridge.send('CONTENT_SYNC', {
+                                html: editor.getData(),
+                                reason: 'initial-sync',
+                                timestamp: Date.now()
+                        });
+                });
 
-		return editor;
-	})
-	.catch(console.error);
+                Bridge.startHandshake();
+
+                return editor;
+        })
+        .catch(error => {
+                console.error(error);
+                Bridge.send('EDITOR_ERROR', {
+                        message: error?.message || 'Failed to initialize CKEditor.',
+                        stack: error?.stack || null,
+                        timestamp: Date.now()
+                });
+        });
 
 // Premium reminder
 function configUpdateAlert(config) {
