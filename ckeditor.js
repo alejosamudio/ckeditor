@@ -771,6 +771,357 @@ DecoupledEditor.create(document.querySelector('#editor'), editorConfig)
                 });
         });
 
+let ckWaitAttempts = 0;
+const MAX_CK_WAIT_ATTEMPTS = 40;
+const CK_WAIT_DELAY_MS = 250;
+
+function waitForCkeditorGlobals() {
+        const ckeditor = window.CKEDITOR;
+        const premium = window.CKEDITOR_PREMIUM_FEATURES;
+
+        if (ckeditor && premium) {
+                initializeEditor(ckeditor, premium);
+                return;
+        }
+
+        ckWaitAttempts += 1;
+
+        if (ckWaitAttempts === 1 || ckWaitAttempts % 10 === 0) {
+                console.warn('[CKEditorBridge] Waiting for CKEditor globals to load...', {
+                        attempt: ckWaitAttempts
+                });
+        }
+
+        if (ckWaitAttempts >= MAX_CK_WAIT_ATTEMPTS) {
+                const message = 'CKEditor UMD bundles did not load in time.';
+                console.error('[CKEditorBridge]', message);
+                Bridge.send('EDITOR_ERROR', {
+                        message,
+                        timestamp: Date.now()
+                });
+                return;
+        }
+
+        window.setTimeout(waitForCkeditorGlobals, CK_WAIT_DELAY_MS);
+}
+
+function initializeEditor(CKEDITOR, CKEDITOR_PREMIUM_FEATURES) {
+        const {
+                AccessibilityHelp,
+                Alignment,
+                Autoformat,
+                AutoImage,
+                AutoLink,
+                Autosave,
+                BalloonToolbar,
+                BlockQuote,
+                Bold,
+                Bookmark,
+                CKBox,
+                CKBoxImageEdit,
+                CKFinder,
+                CloudServices,
+                Code,
+                CodeBlock,
+                Comments,
+                DecoupledEditor,
+                DocumentOutline,
+                Emoji,
+                Enter,
+                Essentials,
+                FindAndReplace,
+                FontBackgroundColor,
+                FontColor,
+                FontFamily,
+                FontSize,
+                FormatPainter,
+                GeneralHtmlSupport,
+                Heading,
+                Highlight,
+                HorizontalLine,
+                HtmlComment,
+                HtmlEmbed,
+                HtmlSupport,
+                Image,
+                ImageBlock,
+                ImageCaption,
+                ImageInline,
+                ImageInsert,
+                ImageInsertViaUrl,
+                ImageResize,
+                ImageStyle,
+                ImageToolbar,
+                ImageUpload,
+                Indent,
+                IndentBlock,
+                Italic,
+                LineHeight,
+                Link,
+                LinkImage,
+                LinkImageEditing,
+                List,
+                ListProperties,
+                Markdown,
+                MediaEmbed,
+                Mention,
+                PageBreak,
+                Paragraph,
+                PasteFromMarkdownExperimental,
+                PasteFromOffice,
+                PictureEditing,
+                PresenceList,
+                RealTimeCollaborativeComments,
+                RealTimeCollaborativeEditing,
+                RealTimeCollaborativeTrackChanges,
+                RemoveFormat,
+                SlashCommand,
+                SpecialCharacters,
+                SpecialCharactersArrows,
+                SpecialCharactersCurrency,
+                SpecialCharactersEssentials,
+                SpecialCharactersLatin,
+                SpecialCharactersMathematical,
+                SpecialCharactersText,
+                Strikethrough,
+                Style,
+                Subscript,
+                Superscript,
+                Table,
+                TableCaption,
+                TableCellProperties,
+                TableColumnResize,
+                TableProperties,
+                TableToolbar,
+                TextTransformation,
+                TodoList,
+                TrackChanges,
+                TrackChangesData,
+                TrackChangesPreview,
+                Underline
+        } = CKEDITOR;
+
+        const {
+                AIChat,
+                AIEditorIntegration,
+                AIQuickActions,
+                AIReviewMode,
+                PasteFromOfficeEnhanced,
+                FormatPainter: PremiumFormatPainter,
+                LineHeight: PremiumLineHeight,
+                RealTimeCollaborativeComments: PremiumComments,
+                RealTimeCollaborativeEditing: PremiumEditing,
+                PresenceList: PremiumPresenceList,
+                Comments: PremiumCommentsPlugin,
+                RealTimeCollaborativeTrackChanges: PremiumTrackChanges,
+                TrackChanges: PremiumTrackChangesPlugin,
+                TrackChangesData: PremiumTrackChangesData,
+                TrackChangesPreview: PremiumTrackChangesPreview,
+                SlashCommand: PremiumSlashCommand
+        } = CKEDITOR_PREMIUM_FEATURES;
+
+        const editorConfig = {
+                autosave: {
+                        waitingTime: 5000,
+                        save() {
+                                return;
+                        }
+                },
+                toolbar: {
+                        items: [
+                                'undo',
+                                'redo',
+                                '|',
+                                'trackChanges',
+                                'comment',
+                                'commentsArchive',
+                                '|',
+                                'toggleAi',
+                                'aiQuickActions',
+                                '|',
+                                'formatPainter',
+                                'findAndReplace',
+                                '|',
+                                'heading',
+                                'style',
+                                'fontSize',
+                                'fontFamily',
+                                'lineHeight',
+                                'fontColor',
+                                'fontBackgroundColor',
+                                '|',
+                                'bold',
+                                'italic',
+                                'underline',
+                                'strikethrough',
+                                'subscript',
+                                'superscript',
+                                'code',
+                                'removeFormat',
+                                '|',
+                                'link',
+                                'blockQuote',
+                                'insertTable',
+                                'insertImage',
+                                'mediaEmbed',
+                                'horizontalLine',
+                                'specialCharacters',
+                                'codeBlock',
+                                '|',
+                                'bulletedList',
+                                'numberedList',
+                                'todoList',
+                                '|',
+                                'outdent',
+                                'indent',
+                                '|',
+                                'alignment'
+                        ],
+                        shouldNotGroupWhenFull: true
+                },
+                ai: {
+                        container: {
+                                type: 'overlay',
+                                side: 'right'
+                        },
+                        chat: {
+                                models: {},
+                                context: {
+                                        document: { enabled: true },
+                                        urls: { enabled: true },
+                                        files: { enabled: true }
+                                }
+                        }
+                },
+                balloonToolbar: [
+                        'comment',
+                        '|',
+                        'aiQuickActions',
+                        '|',
+                        'bold',
+                        'italic',
+                        '|',
+                        'link',
+                        'insertImage',
+                        '|',
+                        'bulletedList',
+                        'numberedList'
+                ],
+                cloudServices: {
+                        tokenUrl: CLOUD_SERVICES_TOKEN_URL,
+                        webSocketUrl: CLOUD_SERVICES_WEBSOCKET_URL
+                },
+                collaboration: { channelId: DOCUMENT_ID },
+                comments: {
+                        editorConfig: {
+                                extraPlugins: [Autoformat, Bold, Italic, List, Mention],
+                                mention: {
+                                        feeds: [{ marker: '@', feed: [] }]
+                                }
+                        }
+                },
+                fontFamily: { supportAllValues: true },
+                fontSize: { options: [10, 12, 14, 'default', 18, 20, 22], supportAllValues: true },
+                heading: {
+                        options: [
+                                { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                                { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                                { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                                { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
+                                { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
+                                { model: 'heading5', view: 'h5', title: 'Heading 5', class: 'ck-heading_heading5' },
+                                { model: 'heading6', view: 'h6', title: 'Heading 6', class: 'ck-heading_heading6' }
+                        ]
+                },
+                image: {
+                        toolbar: [
+                                'toggleImageCaption',
+                                '|',
+                                'imageStyle:alignBlockLeft',
+                                'imageStyle:block',
+                                'imageStyle:alignBlockRight',
+                                '|',
+                                'resizeImage',
+                                '|',
+                                'ckboxImageEdit'
+                        ],
+                        styles: { options: ['alignBlockLeft', 'block', 'alignBlockRight'] }
+                },
+                initialData: '<p>Start writing...</p>',
+                licenseKey: LICENSE_KEY,
+                lineHeight: { supportAllValues: true },
+                link: {
+                        addTargetToExternalLinks: true,
+                        defaultProtocol: 'https://',
+                        decorators: {
+                                toggleDownloadable: {
+                                        mode: 'manual',
+                                        label: 'Downloadable',
+                                        attributes: { download: 'file' }
+                                }
+                        }
+                },
+                list: { properties: { styles: true, startIndex: true, reversed: true } },
+                mention: { feeds: [{ marker: '@', feed: [] }] },
+                placeholder: 'Type or paste your content here!',
+                presenceList: { container: document.querySelector('#editor-presence') },
+                sidebar: { container: document.querySelector('#editor-annotations') },
+                table: {
+                        contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells', 'tableProperties', 'tableCellProperties']
+                }
+        };
+
+        configUpdateAlert(editorConfig);
+
+        const CHANGE_DEBOUNCE_MS = 250;
+
+        DecoupledEditor.create(document.querySelector('#editor'), editorConfig)
+                .then(editor => {
+                        document.querySelector('#editor-toolbar').appendChild(editor.ui.view.toolbar.element);
+                        document.querySelector('#editor-menu-bar').appendChild(editor.ui.view.menuBarView.element);
+
+                        window.editor = editor;
+                        Bridge.setEditor(editor);
+
+                        let debounceTimer;
+                        editor.model.document.on('change:data', () => {
+                                if (suppressChangeEvents) {
+                                        return;
+                                }
+
+                                window.clearTimeout(debounceTimer);
+                                debounceTimer = window.setTimeout(() => {
+                                        const html = editor.getData();
+                                        Bridge.send('CONTENT_CHANGE', {
+                                                html,
+                                                reason: 'user-input',
+                                                timestamp: Date.now()
+                                        });
+                                }, CHANGE_DEBOUNCE_MS);
+                        });
+
+                        Bridge.onParentReady(() => {
+                                Bridge.send('CONTENT_SYNC', {
+                                        html: editor.getData(),
+                                        reason: 'initial-sync',
+                                        timestamp: Date.now()
+                                });
+                        });
+
+                        Bridge.startHandshake();
+
+                        return editor;
+                })
+                .catch(error => {
+                        console.error(error);
+                        Bridge.send('EDITOR_ERROR', {
+                                message: error?.message || 'Failed to initialize CKEditor.',
+                                stack: error?.stack || null,
+                                timestamp: Date.now()
+                        });
+                });
+}
+
+waitForCkeditorGlobals();
 // Premium reminder
 function configUpdateAlert(config) {
 	if (configUpdateAlert.configUpdateAlertShown) return;
