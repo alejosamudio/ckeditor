@@ -215,15 +215,6 @@ const Bridge = (() => {
                                 isEmbedded,
                                 userAgent: navigator.userAgent
                         });
-
-                        // Surface at least one heartbeat log even if debug is disabled to help field diagnostics.
-                        if (!debugEnabled && handshakeAttempts === 1) {
-                                console.info(`${logPrefix} EDITOR_READY #${handshakeAttempts} → parent`, {
-                                        attempt: handshakeAttempts,
-                                        isEmbedded,
-                                        targetOrigin
-                                });
-                        }
                 };
 
                 emitReady();
@@ -376,10 +367,6 @@ const Bridge = (() => {
 })();
 
 window.CKEDITOR_BUBBLE_BRIDGE = Bridge;
-
-// Kick off the handshake immediately so the parent can see EDITOR_READY
-// even if CKEditor initialization is delayed.
-Bridge.startHandshake();
 
 let suppressChangeEvents = false;
 
