@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>CKEditor 5 Sample</title>
+        <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>CKEditor 5 Sample</title>
 		<link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/32x32.png" sizes="32x32">
 		<link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/96x96.png" sizes="96x96">
 		<link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/120x120.png" sizes="120x120">
@@ -27,8 +28,46 @@
 		</div>
 		<script src="https://cdn.ckeditor.com/ckeditor5/47.2.0/ckeditor5.umd.js" crossorigin></script>
 		<script src="https://cdn.ckeditor.com/ckeditor5-premium-features/47.2.0/ckeditor5-premium-features.umd.js" crossorigin></script>
-		<script src="https://cdn.ckbox.io/ckbox/2.6.1/ckbox.js" crossorigin></script>
-		<!-- CKEditor config MUST load AFTER the UMD bundles -->
-		<script type="module" src="./ckeditor.js"></script>
-	</body>
+                <script src="https://cdn.ckbox.io/ckbox/2.6.1/ckbox.js" crossorigin></script>
+                <script>
+                        // Optional toggle for verbose bridge logging when the iframe is embedded.
+                        // This flag is read by ckeditor.js before establishing the communication channel.
+                        window.CKEDITOR_BRIDGE_DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
+
+                        // Emit an inline bootstrap heartbeat so we can see activity even if the bundled script fails to run.
+                        // This also gives the parent frame a minimal postMessage to listen for when debugging sandboxes.
+                        (function bootstrapProbe() {
+                                const details = {
+                                        href: window.location?.href,
+                                        embedded: window.parent !== window,
+                                        userAgent: navigator.userAgent
+                                };
+
+                                console.info('[CKEditorBridge] HTML shell loaded', details);
+
+                                try {
+                                        if (window.parent && window.parent !== window) {
+                                                window.parent.postMessage(
+                                                        {
+                                                                bridge: 'CKE_BUBBLE_BRIDGE_V1',
+                                                                version: '1.0.0',
+                                                                type: 'EDITOR_BOOTSTRAP',
+                                                                direction: 'editor->parent',
+                                                                timestamp: Date.now(),
+                                                                payload: {
+                                                                        phase: 'html-inline',
+                                                                        href: window.location?.href || null
+                                                                }
+                                                        },
+                                                        '*'
+                                                );
+                                        }
+                                } catch (error) {
+                                        console.warn('[CKEditorBridge] Inline bootstrap probe failed', error);
+                                }
+                        })();
+                </script>
+                <!-- CKEditor config MUST load AFTER the UMD bundles -->
+                <script type="module" src="./ckeditor.js"></script>
+        </body>
 </html>
